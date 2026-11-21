@@ -1,0 +1,57 @@
+# Aprendizajes
+
+- Diagnosticar una red por capas: tarjeta, IP, ruta, DNS.
+- Leer permisos de archivos en Linux (`ls -l`) y usar `sudo` solo donde hace falta.
+- YAML es sensible a la indentación: solo espacios, nunca tabulaciones.
+- Cómo funciona el reenvío de puertos: el puerto del anfitrión (2222) es distinto del puerto del servicio en la VM (22).
+- Un usuario con acceso a `sudo` es un usuario normal con permiso de escalar privilegios, no es `root`. Es el mismo principio de mínimo privilegio que en AWS IAM.
+- La diferencia entre grupo primario y grupos suplementarios. En `usermod`, `-G` sin `-a` reemplaza los grupos del usuario en lugar de sumar uno.
+- Verificar el resultado de cada acción (`id`, `getent`) en lugar de darlo por hecho.
+- Con llaves, el secreto nunca viaja al servidor: se demuestra con una firma. El riesgo pasa a ser el robo del archivo de la llave privada, y por eso se protege con passphrase.
+- SSH ignora en silencio `authorized_keys` si los permisos son demasiado abiertos o si la línea está incompleta.
+- `sshd -T` muestra la configuración efectiva y `sshd -t` valida la sintaxis: ambos antes de reiniciar, y con una sesión abierta como salvavidas.
+- En Ubuntu, SSH funciona por activación por socket (`ssh.socket`): el servicio puede verse inactivo hasta que llega una conexión.
+- El mensaje de rechazo `Permission denied (publickey)` no revela por qué se rechazó: es una buena práctica de seguridad.
+- La misma dirección `127.0.0.1` apunta a máquinas distintas según desde dónde se use.
+- El firewall solo ve el puerto que ve la VM: las reglas van por el puerto del servicio (22), no por el del reenvío de VirtualBox (2222).
+- Las reglas de ufw se crean antes de activarlo: con `deny incoming`, todo lo que no tiene regla se bloquea, incluido SSH.
+- Política por defecto: entrante denegado (nadie inicia conexiones hacia el servidor sin permiso) y saliente permitido (la VM puede actualizarse). ufw es *stateful*, así que las respuestas a lo que inicia la VM sí entran.
+- `deny` descarta el paquete en silencio: el cliente se queda esperando, sin confirmar que el puerto existe, a diferencia de un rechazo explícito.
+- Que un servicio escuche (`ss`) no significa que sea accesible: el firewall decide.
+- `IPV6=yes` en `/etc/default/ufw` hace que cada regla exista en v4 y v6.
+- `ufw delete` interpreta un número como número de regla. Conviene borrar por especificación o volver a listar entre borrados, porque los números se reordenan.
+- Dejar abierto solo lo temporal y limpiarlo después: cada regla extra es superficie de ataque.
+- `jail.conf` no se edita porque el paquete puede sobrescribirlo al actualizarse. Los cambios propios van en `jail.local`.
+- `maxretry`, `findtime` y `bantime` en una frase: si una IP falla X veces en Y tiempo, se bloquea Z tiempo.
+- `bantime` y `findtime` aceptan unidades (`10m`, `1h`), pero `fail2ban-client get` siempre responde en segundos.
+- En un archivo INI, las opciones van bajo una sección (`[sshd]`); sin encabezado el servicio no arranca.
+- Los cambios en `jail.local` solo se aplican al reiniciar el servicio.
+- `backend = systemd` hace que el jail lea el diario de systemd en lugar de un archivo de log; conviene fijarlo y no depender de `auto`.
+- Con `banaction = ufw`, fail2ban bloquea creando una regla en ufw, visible en `ufw status` con el comentario `# by Fail2Ban`.
+- Fail2ban banea por IP, no por usuario. En NAT todas las conexiones llegan como `10.0.2.2` (la dirección con la que VirtualBox aparece ante la VM), así que un baneo bloquea todo mi acceso desde Windows.
+- Una IP en `ignoreip` no se banea nunca, pero tampoco se vigila: en este laboratorio equivaldría a apagar la protección.
+- Un baneo de segundos no sirve en producción: al terminar las pruebas se subió el `bantime` a 10 minutos.
+- Capas de defensa: ufw cierra los puertos, SSH con llaves impide adivinar contraseñas, y fail2ban frena a quien insiste.
+- `apt update` actualiza la lista de paquetes y `apt upgrade` instala las versiones nuevas: el orden importa. Nunca va hacia atrás ni agrega paquetes nuevos (eso es `install`; `full-upgrade` sí puede quitar o agregar cuando una actualización lo exige).
+- Un kernel nuevo instalado no protege hasta reiniciar, porque el viejo sigue cargado en memoria. `uname -r` confirma cuál se está ejecutando.
+- Antes de `autoremove` hay que comprobar que no se va a borrar el kernel en uso. Quitar el kernel anterior libera espacio, pero elimina el plan B; en un servidor real suele dejarse uno de respaldo.
+- *Phasing*: Ubuntu libera algunas actualizaciones por etapas, así que un paquete pendiente no siempre es un problema.
+- `unattended-upgrades` solo instala solo la seguridad (sin `-updates`) y no reinicia por defecto; para que un kernel nuevo proteja hay que reiniciar a mano o activar `Automatic-Reboot`.
+- Dejar un parche disponible sin aplicar es responsabilidad del administrador, aunque el fallo sea del fabricante.
+- Reducir superficie de ataque: lo que no corre no se explota. La superficie externa de la VM es un solo puerto (el 22); lo demás escucha en `127.0.0.x`.
+- Un puerto en escucha no implica exposición si el firewall lo bloquea o si escucha solo en loopback; hay que leer la columna de dirección de `ss`.
+- Antes de desactivar un servicio, mirar qué depende de él (`list-dependencies --reverse`). Que solo lo arranque un *target* no significa que alguien lo necesite.
+- `stop` apaga un servicio hasta el próximo reinicio; `disable --now` además evita que vuelva a arrancar. Es reversible con `enable --now`.
+- Linux distingue mayúsculas: `Sudo` no es `sudo`.
+- Una herramienta de auditoría compara contra un perfil genérico: sus sugerencias son opinables y hay que decidir cuáles aplican. Decidir "no aplicar", con razones, también es análisis.
+- El índice de lynis no es la meta: cada sugerencia pesa poco, y subirlo instalando herramientas que no se entienden aumenta la superficie de ataque.
+- `MaxAuthTries` cuenta fallos dentro de una conexión y corta esa conexión; fail2ban cuenta fallos entre conexiones y bloquea la IP. Se complementan, pero la protección real contra fuerza bruta la da fail2ban.
+- El reenvío de VirtualBox (2222 → 22) ocurre en la red NAT, fuera de SSH, así que `AllowTcpForwarding no` no lo afecta. Esa opción bloquea los túneles SSH (`-L`, `-R`, `-D`), aunque un usuario con shell puede esquivarla: es defensa en profundidad.
+- Un error al escribir la passphrase no cuenta como intento de autenticación en el servidor; la passphrase se verifica en el PC. Lo que cuenta es cada llave rechazada.
+- `remove` quita un programa y deja su configuración (estado `rc`); `purge` quita también la configuración.
+- Un warning de paquetes vulnerables puede desaparecer al aplicar las actualizaciones de seguridad; las de `-updates` pendientes no cuentan como vulnerabilidades.
+- Anotar los números "antes" de una auditoría desde el principio: sin ellos no se puede medir la mejora.
+
+
+---
+[← Volver al índice](../README.md)

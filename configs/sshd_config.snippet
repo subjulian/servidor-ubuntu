@@ -1,0 +1,9 @@
+
+# Ubicación: /etc/ssh/sshd_config
+# Validar antes de reiniciar: sudo sshd -t
+# Ver valores efectivos:      sudo sshd -T | grep -Ei 'passwordauthentication|permitrootlogin|maxauthtries|allowtcpforwarding'
+
+PasswordAuthentication no
+PermitRootLogin no
+MaxAuthTries 3
+AllowTcpForwarding no

@@ -1,0 +1,10 @@
+# /etc/fail2ban/jail.local  (Reto 4)
+# Regla: si una IP falla 3 veces en 10 minutos, se bloquea 10 minutos.
+[sshd]
+enabled = true
+maxretry = 3
+findtime = 10m
+bantime = 10m
+ignoreip =
+backend = systemd
+banaction = ufw
